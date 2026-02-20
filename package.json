@@ -1,0 +1,23 @@
+{
+  "name": "meroshare-cli",
+  "version": "0.1.0",
+  "description": "Meroshare portfolio viewer CLI for multiple accounts",
+  "type": "module",
+  "bin": {
+    "meroshare": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --clean",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "node-libcurl": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsdown": "^0",
+    "tsx": "^4",
+    "typescript": "^5.7"
+  }
+}
