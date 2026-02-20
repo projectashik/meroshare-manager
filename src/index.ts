@@ -19,6 +19,7 @@ import {
   displayApplyResult,
   displayBankInfo,
 } from "./display.js";
+import { isMacOS, keychainAvailable, loadFromKeychain, saveToKeychain } from "./keychain.js";
 import type { Config, DP, Account } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -61,11 +62,23 @@ function ensureConfigDir(): void {
 }
 
 function saveConfig(config: Config): void {
+  if (isMacOS() && keychainAvailable()) {
+    saveToKeychain(config.accounts);
+    return;
+  }
   ensureConfigDir();
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
 function loadConfig(exitIfEmpty = true): Config {
+  // On macOS, try Keychain first
+  if (isMacOS() && keychainAvailable()) {
+    const accounts = loadFromKeychain();
+    if (accounts && accounts.length > 0) {
+      return { accounts };
+    }
+  }
+
   const configPath = getConfigPath();
 
   const paths = [
@@ -218,16 +231,19 @@ function helpCommand(): void {
     "    " + c.cyan + "meroshare" + c.reset + " " + c.dim + "<command>" + c.reset,
     "",
     "  " + c.bold + "COMMANDS" + c.reset,
-    "    " + c.cyan + "init" + c.reset + "         Check dependencies and create config file",
+    "    " + c.cyan + "init" + c.reset + "         Check dependencies and set up storage",
     "    " + c.cyan + "configure" + c.reset + "    Interactive account setup",
     "    " + c.cyan + "accounts" + c.reset + "     List, add, remove, or update accounts",
     "    " + c.cyan + "portfolio" + c.reset + "    Show portfolio for all accounts " + c.dim + "(default)" + c.reset,
     "    " + c.cyan + "apply" + c.reset + "        Apply for an open IPO across accounts",
+    "    " + c.cyan + "migrate" + c.reset + "      Migrate config.json → macOS Keychain",
     "    " + c.cyan + "help" + c.reset + "         Show this help message",
     "    " + c.cyan + "version" + c.reset + "      Show version",
     "",
-    "  " + c.bold + "CONFIG" + c.reset,
-    "    " + c.dim + getConfigPath() + c.reset,
+    "  " + c.bold + "STORAGE" + c.reset,
+    isMacOS()
+      ? "    " + c.green + "◆" + c.reset + " macOS Keychain " + c.dim + "(secure)" + c.reset
+      : "    " + c.dim + getConfigPath() + c.reset,
     "",
     "  " + c.bold + "EXAMPLES" + c.reset,
     "    " + c.dim + "$" + c.reset + " meroshare init              " + c.dim + "# first-time init" + c.reset,
@@ -263,18 +279,29 @@ async function initCommand(): Promise<void> {
   }
   console.log("  " + c.green + "✓" + c.reset + " Node.js v" + nodeVersion);
 
-  // 3. Create config file
-  const configPath = getConfigPath();
+  // 3. Check storage / create config
+  const useKeychain = isMacOS() && keychainAvailable();
 
-  if (existsSync(configPath)) {
-    const existing = loadConfig(false);
-    console.log("  " + c.green + "✓" + c.reset + " Config exists (" + existing.accounts.length + " account(s))");
-    console.log("    " + c.dim + configPath + c.reset);
+  if (useKeychain) {
+    const keychainAccounts = loadFromKeychain();
+    if (keychainAccounts && keychainAccounts.length > 0) {
+      console.log("  " + c.green + "✓" + c.reset + " Keychain storage (" + keychainAccounts.length + " account(s))");
+    } else {
+      console.log("  " + c.green + "✓" + c.reset + " Keychain storage ready (macOS)");
+    }
+    console.log("    " + c.dim + "Credentials are stored securely in macOS Keychain" + c.reset);
   } else {
-    ensureConfigDir();
-    saveConfig(SAMPLE_CONFIG);
-    console.log("  " + c.green + "✓" + c.reset + " Config created at:");
-    console.log("    " + c.dim + configPath + c.reset);
+    const configPath = getConfigPath();
+    if (existsSync(configPath)) {
+      const existing = loadConfig(false);
+      console.log("  " + c.green + "✓" + c.reset + " Config exists (" + existing.accounts.length + " account(s))");
+      console.log("    " + c.dim + configPath + c.reset);
+    } else {
+      ensureConfigDir();
+      writeFileSync(configPath, JSON.stringify(SAMPLE_CONFIG, null, 2) + "\n", "utf-8");
+      console.log("  " + c.green + "✓" + c.reset + " Config created at:");
+      console.log("    " + c.dim + configPath + c.reset);
+    }
   }
 
   // 4. Test API connectivity
@@ -323,7 +350,11 @@ async function configureCommand(): Promise<void> {
   saveConfig(existing);
 
   console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + account.username + c.reset + " added successfully.");
-  console.log("  Config saved to: " + c.dim + getConfigPath() + c.reset);
+  if (isMacOS() && keychainAvailable()) {
+    console.log("  Saved to: " + c.dim + "macOS Keychain" + c.reset);
+  } else {
+    console.log("  Config saved to: " + c.dim + getConfigPath() + c.reset);
+  }
 
   const addMore = await prompt("\n  Add another account? (y/n): ");
   if (addMore.toLowerCase() === "y") {
@@ -763,6 +794,83 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
   printFooter();
 }
 
+// ─── Migrate Command ────────────────────────────────────────────────────────────
+
+async function migrateCommand(): Promise<void> {
+  printHeader("MEROSHARE — MIGRATE TO KEYCHAIN");
+
+  if (!isMacOS()) {
+    console.log("\n  " + c.red + "✗" + c.reset + " Keychain storage is only available on macOS.");
+    console.log("  Your current system uses config.json for credential storage.\n");
+    return;
+  }
+
+  if (!keychainAvailable()) {
+    console.log("\n  " + c.red + "✗" + c.reset + " Could not access macOS Keychain.");
+    console.log("  Make sure the " + c.cyan + "security" + c.reset + " command is available.\n");
+    return;
+  }
+
+  // Check if already using keychain
+  const keychainAccounts = loadFromKeychain();
+  if (keychainAccounts && keychainAccounts.length > 0) {
+    console.log("\n  " + c.yellow + "⚠" + c.reset + " Keychain already has " + keychainAccounts.length + " account(s).");
+    const overwrite = await prompt("  Overwrite with config.json data? (y/n): ");
+    if (overwrite.toLowerCase() !== "y") {
+      console.log("  Cancelled.\n");
+      return;
+    }
+  }
+
+  // Load from config.json
+  const configPath = getConfigPath();
+  let config: Config;
+  try {
+    const raw = readFileSync(configPath, "utf-8");
+    config = JSON.parse(raw) as Config;
+  } catch {
+    console.log("\n  " + c.red + "✗" + c.reset + " No config.json found at:");
+    console.log("    " + c.dim + configPath + c.reset);
+    console.log("\n  Nothing to migrate.\n");
+    return;
+  }
+
+  if (config.accounts.length === 0) {
+    console.log("\n  " + c.yellow + "⚠" + c.reset + " config.json has no accounts. Nothing to migrate.\n");
+    return;
+  }
+
+  // Save to keychain
+  console.log("\n  Migrating " + c.bold + config.accounts.length + c.reset + " account(s) to macOS Keychain...");
+  try {
+    saveToKeychain(config.accounts);
+    console.log("  " + c.green + "✓" + c.reset + " Accounts saved to Keychain successfully.");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log("  " + c.red + "✗" + c.reset + " Failed to save to Keychain: " + msg);
+    return;
+  }
+
+  // Offer to remove config.json
+  console.log("");
+  console.log("  Your credentials are now stored securely in macOS Keychain.");
+  console.log("  The old config.json still exists at:");
+  console.log("    " + c.dim + configPath + c.reset);
+
+  const remove = await prompt("\n  Delete the old config.json? (y/n): ");
+  if (remove.toLowerCase() === "y") {
+    const { unlinkSync } = await import("node:fs");
+    try {
+      unlinkSync(configPath);
+      console.log("  " + c.green + "✓" + c.reset + " config.json deleted.\n");
+    } catch {
+      console.log("  " + c.yellow + "⚠" + c.reset + " Could not delete config.json. You can remove it manually.\n");
+    }
+  } else {
+    console.log("  " + c.dim + "You can delete it manually later." + c.reset + "\n");
+  }
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -788,6 +896,9 @@ async function main(): Promise<void> {
       return;
     case "accounts":
       await accountsCommand();
+      return;
+    case "migrate":
+      await migrateCommand();
       return;
   }
 

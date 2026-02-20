@@ -10,6 +10,7 @@ A command-line tool to view your portfolio and apply for IPOs across multiple Me
   - Lets you select individual accounts or apply to all unapplied at once
   - Fetches bank details automatically from the API
 - **Account Management** — Add, remove, update accounts interactively
+- **Secure Storage** — Credentials stored in macOS Keychain (falls back to config.json on other platforms)
 
 Zero runtime dependencies. Uses system `curl` under the hood to communicate with the Meroshare API.
 
@@ -32,11 +33,12 @@ npx @cbashik/meroshare@latest apply
 ## Commands
 
 ```bash
-npx @cbashik/meroshare@latest init           # Check curl, Node.js, create config
+npx @cbashik/meroshare@latest init           # Check curl, Node.js, set up storage
 npx @cbashik/meroshare@latest configure      # Add accounts interactively
 npx @cbashik/meroshare@latest accounts       # List, add, remove, or update accounts
 npx @cbashik/meroshare@latest portfolio      # Show portfolio (default)
 npx @cbashik/meroshare@latest apply          # Apply for an open IPO
+npx @cbashik/meroshare@latest migrate        # Migrate config.json → macOS Keychain
 npx @cbashik/meroshare@latest help           # Show help
 npx @cbashik/meroshare@latest version        # Show version
 ```
@@ -47,11 +49,17 @@ Running without a command defaults to `portfolio`:
 npx @cbashik/meroshare@latest
 ```
 
-## Configuration
+## Storage
 
-Config is stored at `~/.config/meroshare/config.json` on macOS and Linux, or `%APPDATA%\meroshare\config.json` on Windows.
+On **macOS**, credentials are stored securely in the system Keychain. No plain-text config file is needed. Run `migrate` to move existing accounts from config.json to Keychain:
 
-You can set up accounts interactively with `configure`, or edit the file directly:
+```bash
+npx @cbashik/meroshare@latest migrate
+```
+
+On **Linux** and **Windows**, config is stored at `~/.config/meroshare/config.json` or `%APPDATA%\meroshare\config.json`.
+
+You can set up accounts interactively with `configure`, or on non-macOS systems edit the file directly:
 
 ```json
 {
