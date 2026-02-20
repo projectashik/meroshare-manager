@@ -2,6 +2,8 @@ export interface Account {
   dpCode: string;
   username: string;
   password: string;
+  crn?: string;
+  transactionPin?: string;
 }
 
 export interface Config {
@@ -67,4 +69,70 @@ export interface PortfolioResponse {
   totalValueAsOfPreviousClosingPrice: string;
   totalValueOfLastTransPrice: number;
   totalValueOfPrevClosingPrice: number;
+}
+
+// ─── IPO Apply Types ──────────────────────────────────────────────────────────
+
+export interface ApplicableIssue {
+  companyShareId: number;
+  scrip: string;
+  companyName: string;
+  shareTypeName: string;
+  shareGroupName: string;
+  subGroup: string;
+}
+
+export interface ApplicableIssueResponse {
+  object: ApplicableIssue[];
+  totalCount: number;
+}
+
+export interface IssueDetail {
+  clientName: string;
+  companyName: string;
+  companyShareId: number;
+  minUnit: number;
+  maxUnit: number;
+  multipleOf: number;
+  scrip: string;
+  sharePerUnit: number;
+  shareValue: number;
+  shareTypeName: string;
+  shareGroupName: string;
+  subGroup: string;
+}
+
+export interface Bank {
+  code: string;
+  id: number;
+  name: string;
+}
+
+export interface BankAccount {
+  accountBranchId: number;
+  accountNumber: string;
+  accountTypeId: number;
+  accountTypeName: string;
+  branchName: string;
+  id: number;
+}
+
+export interface ApplyPayload {
+  demat: string;
+  boid: string;
+  accountNumber: string;
+  customerId: number;
+  accountBranchId: number;
+  accountTypeId: number;
+  appliedKitta: string;
+  crnNumber: string;
+  transactionPIN: string;
+  companyShareId: string;
+  bankId: string;
+}
+
+export interface ApplyResponse {
+  statusCode?: number;
+  message?: string;
+  status?: string;
 }

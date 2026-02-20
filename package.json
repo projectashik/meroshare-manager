@@ -1,23 +1,19 @@
 {
-  "name": "meroshare-cli",
+  "name": "@cbashik/meroshare",
   "version": "0.1.0",
-  "description": "Meroshare portfolio viewer CLI for multiple accounts",
+  "description": "CLI tool for Meroshare — view portfolio and apply for IPOs across multiple accounts",
   "type": "module",
   "bin": {
     "meroshare": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --clean",
-    "dev": "tsx src/index.ts",
+    "build": "tsc",
     "start": "node dist/index.js"
   },
-  "dependencies": {
-    "node-libcurl": "^4"
-  },
+  "keywords": ["meroshare", "nepal", "stock", "ipo", "portfolio", "cdsc", "cli"],
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^22",
-    "tsdown": "^0",
-    "tsx": "^4",
     "typescript": "^5.7"
   }
 }
