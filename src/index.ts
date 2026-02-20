@@ -41,8 +41,6 @@ const c = {
 
 function getConfigDir(): string {
   const home = homedir();
-  // Use ~/.config/meroshare on all Unix-like systems (macOS + Linux)
-  // On Windows use %APPDATA%\meroshare
   if (process.platform === "win32") {
     return join(process.env.APPDATA ?? join(home, "AppData", "Roaming"), "meroshare");
   }
@@ -70,7 +68,6 @@ function saveConfig(config: Config): void {
 function loadConfig(exitIfEmpty = true): Config {
   const configPath = getConfigPath();
 
-  // Also check CWD and project dir as fallbacks
   const paths = [
     configPath,
     resolve(process.cwd(), "config.json"),
@@ -87,8 +84,8 @@ function loadConfig(exitIfEmpty = true): Config {
   }
 
   if (exitIfEmpty) {
-    console.log(`\n  No config found. Run ${c.cyan}meroshare configure${c.reset} to set up your accounts.`);
-    console.log(`  Config path: ${c.dim}${configPath}${c.reset}\n`);
+    console.log("\n  No config found. Run " + c.cyan + "meroshare init" + c.reset + " to get started.");
+    console.log("  Config path: " + c.dim + configPath + c.reset + "\n");
     process.exit(1);
   }
 
@@ -110,9 +107,7 @@ function prompt(question: string): Promise<string> {
 function promptPassword(question: string): Promise<string> {
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    // Mute output for password entry
     const stdin = process.stdin;
-    const wasMuted = (rl as any).terminal;
 
     if (stdin.isTTY) {
       stdin.setRawMode(true);
@@ -130,13 +125,11 @@ function promptPassword(question: string): Promise<string> {
         rl.close();
         resolve(password);
       } else if (char === "\u007F" || char === "\b") {
-        // Backspace
         if (password.length > 0) {
           password = password.slice(0, -1);
           process.stdout.write("\b \b");
         }
       } else if (char === "\u0003") {
-        // Ctrl+C
         process.stdout.write("\n");
         process.exit(0);
       } else {
@@ -150,33 +143,160 @@ function promptPassword(question: string): Promise<string> {
   });
 }
 
+// ─── Curl Check ─────────────────────────────────────────────────────────────────
+
+function isCurlInstalled(): boolean {
+  try {
+    execFileSync("curl", ["--version"], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isBrewInstalled(): boolean {
+  try {
+    execFileSync("brew", ["--version"], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureCurl(): Promise<boolean> {
+  if (isCurlInstalled()) {
+    console.log("  " + c.green + "✓" + c.reset + " curl is installed");
+    return true;
+  }
+
+  console.log("\n  " + c.red + "✗" + c.reset + " curl is not installed. Meroshare CLI requires curl.\n");
+
+  const os = platform();
+
+  if (os === "darwin") {
+    if (isBrewInstalled()) {
+      const install = await prompt("  Install curl via Homebrew? (y/n): ");
+      if (install.toLowerCase() === "y") {
+        console.log("\n  " + c.dim + "Running: brew install curl" + c.reset + "\n");
+        try {
+          execFileSync("brew", ["install", "curl"], { stdio: "inherit" });
+          if (isCurlInstalled()) {
+            console.log("\n  " + c.green + "✓" + c.reset + " curl installed successfully.\n");
+            return true;
+          }
+        } catch {
+          console.error("\n  " + c.red + "✗" + c.reset + " Failed to install curl via Homebrew.\n");
+        }
+      }
+    } else {
+      console.log("  Install curl using Homebrew:");
+      console.log("    " + c.cyan + "brew install curl" + c.reset + "\n");
+      console.log("  Or install Homebrew first: " + c.dim + "https://brew.sh" + c.reset + "\n");
+    }
+  } else if (os === "linux") {
+    console.log("  Install curl using your package manager:");
+    console.log("    " + c.cyan + "sudo apt install curl" + c.reset + "       " + c.dim + "# Debian/Ubuntu" + c.reset);
+    console.log("    " + c.cyan + "sudo dnf install curl" + c.reset + "       " + c.dim + "# Fedora" + c.reset);
+    console.log("    " + c.cyan + "sudo pacman -S curl" + c.reset + "         " + c.dim + "# Arch" + c.reset + "\n");
+  } else if (os === "win32") {
+    console.log("  Install curl: " + c.dim + "https://curl.se/windows/" + c.reset);
+    console.log("  Or via winget: " + c.cyan + "winget install curl" + c.reset + "\n");
+  }
+
+  return false;
+}
+
 // ─── Help Command ───────────────────────────────────────────────────────────────
 
 function helpCommand(): void {
-  console.log(`
-  ${c.bold}${c.cyan}@cbashik/meroshare${c.reset} ${c.dim}v${VERSION}${c.reset}
-  CLI tool for Meroshare — portfolio viewer & IPO applicator
+  const lines = [
+    "",
+    "  " + c.bold + c.cyan + "@cbashik/meroshare" + c.reset + " " + c.dim + "v" + VERSION + c.reset,
+    "  CLI tool for Meroshare — portfolio viewer & IPO applicator",
+    "",
+    "  " + c.bold + "USAGE" + c.reset,
+    "    " + c.cyan + "meroshare" + c.reset + " " + c.dim + "<command>" + c.reset,
+    "",
+    "  " + c.bold + "COMMANDS" + c.reset,
+    "    " + c.cyan + "init" + c.reset + "         Check dependencies and create config file",
+    "    " + c.cyan + "configure" + c.reset + "    Interactive account setup",
+    "    " + c.cyan + "accounts" + c.reset + "     List, add, remove, or update accounts",
+    "    " + c.cyan + "portfolio" + c.reset + "    Show portfolio for all accounts " + c.dim + "(default)" + c.reset,
+    "    " + c.cyan + "apply" + c.reset + "        Apply for an open IPO across accounts",
+    "    " + c.cyan + "help" + c.reset + "         Show this help message",
+    "    " + c.cyan + "version" + c.reset + "      Show version",
+    "",
+    "  " + c.bold + "CONFIG" + c.reset,
+    "    " + c.dim + getConfigPath() + c.reset,
+    "",
+    "  " + c.bold + "EXAMPLES" + c.reset,
+    "    " + c.dim + "$" + c.reset + " meroshare init              " + c.dim + "# first-time init" + c.reset,
+    "    " + c.dim + "$" + c.reset + " meroshare configure          " + c.dim + "# add accounts" + c.reset,
+    "    " + c.dim + "$" + c.reset + " meroshare                    " + c.dim + "# show portfolio" + c.reset,
+    "    " + c.dim + "$" + c.reset + " meroshare apply              " + c.dim + "# apply for an IPO" + c.reset,
+    "    " + c.dim + "$" + c.reset + " meroshare accounts           " + c.dim + "# manage accounts" + c.reset,
+    "",
+  ];
+  console.log(lines.join("\n"));
+}
 
-  ${c.bold}USAGE${c.reset}
-    ${c.cyan}meroshare${c.reset} ${c.dim}<command>${c.reset}
+// ─── Init Command ───────────────────────────────────────────────────────────────
 
-  ${c.bold}COMMANDS${c.reset}
-    ${c.cyan}portfolio${c.reset}    Show portfolio for all accounts ${c.dim}(default)${c.reset}
-    ${c.cyan}apply${c.reset}        Apply for an open IPO across accounts
-    ${c.cyan}accounts${c.reset}     List, add, remove, or update accounts
-    ${c.cyan}configure${c.reset}    Interactive first-time setup
-    ${c.cyan}help${c.reset}         Show this help message
-    ${c.cyan}version${c.reset}      Show version
+async function initCommand(): Promise<void> {
+  printHeader("MEROSHARE CLI — INIT");
 
-  ${c.bold}CONFIG${c.reset}
-    ${c.dim}${getConfigPath()}${c.reset}
+  // 1. Check dependencies
+  console.log("\n  " + c.bold + "Checking dependencies..." + c.reset + "\n");
 
-  ${c.bold}EXAMPLES${c.reset}
-    ${c.dim}$${c.reset} meroshare                  ${c.dim}# show portfolio${c.reset}
-    ${c.dim}$${c.reset} meroshare apply             ${c.dim}# apply for an IPO${c.reset}
-    ${c.dim}$${c.reset} meroshare accounts          ${c.dim}# manage accounts${c.reset}
-    ${c.dim}$${c.reset} meroshare configure          ${c.dim}# first-time setup${c.reset}
-`);
+  const hasCurl = await ensureCurl();
+  if (!hasCurl) {
+    console.log("  Install curl and run " + c.cyan + "meroshare init" + c.reset + " again.\n");
+    process.exit(1);
+  }
+
+  // 2. Check Node version
+  const nodeVersion = process.versions.node;
+  const major = parseInt(nodeVersion.split(".")[0]!, 10);
+  if (major < 18) {
+    console.log("  " + c.red + "✗" + c.reset + " Node.js v" + nodeVersion + " detected. v18+ is required.\n");
+    process.exit(1);
+  }
+  console.log("  " + c.green + "✓" + c.reset + " Node.js v" + nodeVersion);
+
+  // 3. Create config file
+  const configPath = getConfigPath();
+
+  if (existsSync(configPath)) {
+    const existing = loadConfig(false);
+    console.log("  " + c.green + "✓" + c.reset + " Config exists (" + existing.accounts.length + " account(s))");
+    console.log("    " + c.dim + configPath + c.reset);
+  } else {
+    ensureConfigDir();
+    saveConfig(SAMPLE_CONFIG);
+    console.log("  " + c.green + "✓" + c.reset + " Config created at:");
+    console.log("    " + c.dim + configPath + c.reset);
+  }
+
+  // 4. Test API connectivity
+  console.log("\n  " + c.bold + "Testing API connectivity..." + c.reset + "\n");
+  try {
+    const client = new MeroshareClient();
+    const dpList = await client.getDPList();
+    console.log("  " + c.green + "✓" + c.reset + " Meroshare API is reachable (" + dpList.length + " DPs)");
+  } catch {
+    console.log("  " + c.yellow + "⚠" + c.reset + " Could not reach Meroshare API. This may be a temporary issue.");
+  }
+
+  // 5. Next steps
+  const existing = loadConfig(false);
+  if (existing.accounts.length === 0) {
+    console.log("\n  " + c.bold + "Next steps:" + c.reset);
+    console.log("    1. Run " + c.cyan + "meroshare configure" + c.reset + " to add your accounts");
+    console.log("    2. Run " + c.cyan + "meroshare" + c.reset + " to view your portfolio");
+    console.log("    3. Run " + c.cyan + "meroshare apply" + c.reset + " to apply for IPOs\n");
+  } else {
+    console.log("\n  " + c.green + "All good!" + c.reset + " Run " + c.cyan + "meroshare" + c.reset + " to get started.\n");
+  }
 }
 
 // ─── Configure Command ──────────────────────────────────────────────────────────
@@ -186,14 +306,14 @@ async function configureCommand(): Promise<void> {
 
   const existing = loadConfig(false);
   if (existing.accounts.length > 0) {
-    console.log(`\n  You already have ${c.bold}${existing.accounts.length}${c.reset} account(s) configured.`);
-    const action = await prompt(`  Add another account? (y/n): `);
+    console.log("\n  You already have " + c.bold + existing.accounts.length + c.reset + " account(s) configured.");
+    const action = await prompt("  Add another account? (y/n): ");
     if (action.toLowerCase() !== "y") {
-      console.log(`\n  Run ${c.cyan}meroshare accounts${c.reset} to manage existing accounts.\n`);
+      console.log("\n  Run " + c.cyan + "meroshare accounts" + c.reset + " to manage existing accounts.\n");
       return;
     }
   } else {
-    console.log(`\n  Let's set up your first Meroshare account.\n`);
+    console.log("\n  Let's set up your first Meroshare account.\n");
   }
 
   const account = await promptAccountDetails();
@@ -202,36 +322,36 @@ async function configureCommand(): Promise<void> {
   existing.accounts.push(account);
   saveConfig(existing);
 
-  console.log(`\n  ${c.green}✓${c.reset} Account ${c.bold}${account.username}${c.reset} added successfully.`);
-  console.log(`  Config saved to: ${c.dim}${getConfigPath()}${c.reset}`);
+  console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + account.username + c.reset + " added successfully.");
+  console.log("  Config saved to: " + c.dim + getConfigPath() + c.reset);
 
-  const addMore = await prompt(`\n  Add another account? (y/n): `);
+  const addMore = await prompt("\n  Add another account? (y/n): ");
   if (addMore.toLowerCase() === "y") {
     const another = await promptAccountDetails();
     if (another) {
       existing.accounts.push(another);
       saveConfig(existing);
-      console.log(`\n  ${c.green}✓${c.reset} Account ${c.bold}${another.username}${c.reset} added successfully.`);
+      console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + another.username + c.reset + " added successfully.");
     }
   }
 
-  console.log(`\n  Setup complete! Run ${c.cyan}meroshare${c.reset} to view your portfolio.\n`);
+  console.log("\n  Setup complete! Run " + c.cyan + "meroshare" + c.reset + " to view your portfolio.\n");
 }
 
 async function promptAccountDetails(): Promise<Account | null> {
-  console.log(`  ${c.dim}${"─".repeat(50)}${c.reset}`);
+  console.log("  " + c.dim + "─".repeat(50) + c.reset);
 
-  const dpCode = await prompt(`  DP Code (e.g. 11000): `);
+  const dpCode = await prompt("  DP Code (e.g. 11000): ");
   if (!dpCode) { console.log("  Cancelled."); return null; }
 
-  const username = await prompt(`  BOID / Username: `);
+  const username = await prompt("  BOID / Username: ");
   if (!username) { console.log("  Cancelled."); return null; }
 
-  const password = await promptPassword(`  Password: `);
+  const password = await promptPassword("  Password: ");
   if (!password) { console.log("  Cancelled."); return null; }
 
-  const crn = await prompt(`  CRN Number: `);
-  const transactionPin = await prompt(`  Transaction PIN (4 digits): `);
+  const crn = await prompt("  CRN Number: ");
+  const transactionPin = await prompt("  Transaction PIN (4 digits): ");
 
   return { dpCode, username, password, crn: crn || undefined, transactionPin: transactionPin || undefined };
 }
@@ -242,32 +362,31 @@ async function accountsCommand(): Promise<void> {
   const config = loadConfig(false);
 
   if (config.accounts.length === 0) {
-    console.log(`\n  No accounts configured. Run ${c.cyan}meroshare configure${c.reset} to add one.\n`);
+    console.log("\n  No accounts configured. Run " + c.cyan + "meroshare configure" + c.reset + " to add one.\n");
     return;
   }
 
-  printHeader(`MEROSHARE ACCOUNTS (${config.accounts.length})`);
+  printHeader("MEROSHARE ACCOUNTS (" + config.accounts.length + ")");
 
-  // List accounts
   for (let i = 0; i < config.accounts.length; i++) {
     const a = config.accounts[i]!;
     const hasCrn = a.crn ? c.green + "✓" + c.reset : c.red + "✗" + c.reset;
     const hasPin = a.transactionPin ? c.green + "✓" + c.reset : c.red + "✗" + c.reset;
     console.log(
-      `  ${c.cyan}${i + 1}.${c.reset}  ` +
-      `${c.bold}${a.username}${c.reset}  ` +
-      `${c.dim}DP: ${a.dpCode}${c.reset}  ` +
-      `CRN: ${hasCrn}  PIN: ${hasPin}`
+      "  " + c.cyan + (i + 1) + "." + c.reset + "  " +
+      c.bold + a.username + c.reset + "  " +
+      c.dim + "DP: " + a.dpCode + c.reset + "  " +
+      "CRN: " + hasCrn + "  PIN: " + hasPin
     );
   }
 
-  console.log(`\n  ${c.bold}Actions:${c.reset}`);
-  console.log(`  ${c.cyan}a${c.reset} — Add new account`);
-  console.log(`  ${c.cyan}r${c.reset} — Remove an account`);
-  console.log(`  ${c.cyan}u${c.reset} — Update an account`);
-  console.log(`  ${c.cyan}q${c.reset} — Quit`);
+  console.log("\n  " + c.bold + "Actions:" + c.reset);
+  console.log("  " + c.cyan + "a" + c.reset + " — Add new account");
+  console.log("  " + c.cyan + "r" + c.reset + " — Remove an account");
+  console.log("  " + c.cyan + "u" + c.reset + " — Update an account");
+  console.log("  " + c.cyan + "q" + c.reset + " — Quit");
 
-  const action = await prompt(`\n  Choose action: `);
+  const action = await prompt("\n  Choose action: ");
 
   switch (action.toLowerCase()) {
     case "a":
@@ -294,11 +413,11 @@ async function accountsAdd(config: Config): Promise<void> {
 
   config.accounts.push(account);
   saveConfig(config);
-  console.log(`\n  ${c.green}✓${c.reset} Account ${c.bold}${account.username}${c.reset} added.\n`);
+  console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + account.username + c.reset + " added.\n");
 }
 
 async function accountsRemove(config: Config): Promise<void> {
-  const idx = await prompt(`  Enter account number to remove (1-${config.accounts.length}): `);
+  const idx = await prompt("  Enter account number to remove (1-" + config.accounts.length + "): ");
   const i = parseInt(idx, 10) - 1;
   if (isNaN(i) || i < 0 || i >= config.accounts.length) {
     console.log("  Invalid selection.");
@@ -306,19 +425,19 @@ async function accountsRemove(config: Config): Promise<void> {
   }
 
   const removed = config.accounts[i]!;
-  const confirm = await prompt(`  Remove ${c.bold}${removed.username}${c.reset} (DP: ${removed.dpCode})? (y/n): `);
-  if (confirm.toLowerCase() !== "y") {
+  const confirmRemove = await prompt("  Remove " + c.bold + removed.username + c.reset + " (DP: " + removed.dpCode + ")? (y/n): ");
+  if (confirmRemove.toLowerCase() !== "y") {
     console.log("  Cancelled.");
     return;
   }
 
   config.accounts.splice(i, 1);
   saveConfig(config);
-  console.log(`\n  ${c.green}✓${c.reset} Account ${c.bold}${removed.username}${c.reset} removed.\n`);
+  console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + removed.username + c.reset + " removed.\n");
 }
 
 async function accountsUpdate(config: Config): Promise<void> {
-  const idx = await prompt(`  Enter account number to update (1-${config.accounts.length}): `);
+  const idx = await prompt("  Enter account number to update (1-" + config.accounts.length + "): ");
   const i = parseInt(idx, 10) - 1;
   if (isNaN(i) || i < 0 || i >= config.accounts.length) {
     console.log("  Invalid selection.");
@@ -326,13 +445,13 @@ async function accountsUpdate(config: Config): Promise<void> {
   }
 
   const existing = config.accounts[i]!;
-  console.log(`\n  Updating ${c.bold}${existing.username}${c.reset}. Press Enter to keep current value.\n`);
+  console.log("\n  Updating " + c.bold + existing.username + c.reset + ". Press Enter to keep current value.\n");
 
-  const dpCode = await prompt(`  DP Code [${existing.dpCode}]: `);
-  const username = await prompt(`  BOID / Username [${existing.username}]: `);
-  const password = await promptPassword(`  Password [${c.dim}unchanged${c.reset}]: `);
-  const crn = await prompt(`  CRN [${existing.crn ?? "not set"}]: `);
-  const transactionPin = await prompt(`  Transaction PIN [${existing.transactionPin ? "****" : "not set"}]: `);
+  const dpCode = await prompt("  DP Code [" + existing.dpCode + "]: ");
+  const username = await prompt("  BOID / Username [" + existing.username + "]: ");
+  const password = await promptPassword("  Password [" + c.dim + "unchanged" + c.reset + "]: ");
+  const crn = await prompt("  CRN [" + (existing.crn ?? "not set") + "]: ");
+  const transactionPin = await prompt("  Transaction PIN [" + (existing.transactionPin ? "****" : "not set") + "]: ");
 
   config.accounts[i] = {
     dpCode: dpCode || existing.dpCode,
@@ -343,14 +462,14 @@ async function accountsUpdate(config: Config): Promise<void> {
   };
 
   saveConfig(config);
-  console.log(`\n  ${c.green}✓${c.reset} Account ${c.bold}${config.accounts[i]!.username}${c.reset} updated.\n`);
+  console.log("\n  " + c.green + "✓" + c.reset + " Account " + c.bold + config.accounts[i]!.username + c.reset + " updated.\n");
 }
 
 // ─── Portfolio Command ──────────────────────────────────────────────────────────
 
 async function portfolioCommand(config: Config, dpList: DP[]): Promise<void> {
   const { accounts } = config;
-  printHeader(`MEROSHARE PORTFOLIO  —  ${accounts.length} Account(s)`);
+  printHeader("MEROSHARE PORTFOLIO  —  " + accounts.length + " Account(s)");
 
   const client = new MeroshareClient();
   let grandTotal = 0;
@@ -361,7 +480,7 @@ async function portfolioCommand(config: Config, dpList: DP[]): Promise<void> {
 
     try {
       const { id: dpId, name: dpName } = client.getDPId(dpCode, dpList);
-      printStatus(`Logging in as ${username} @ ${dpName}...`);
+      printStatus("Logging in as " + username + " @ " + dpName + "...");
 
       await client.login(dpId, username, password);
       printStatus("", true);
@@ -375,7 +494,7 @@ async function portfolioCommand(config: Config, dpList: DP[]): Promise<void> {
       await client.logout();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      printError(`Error for ${username}: ${msg}`);
+      printError("Error for " + username + ": " + msg);
     }
   }
 
@@ -401,31 +520,26 @@ interface AccountStatus {
 async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
   const { accounts } = config;
 
-  // Validate that all accounts have crn and transactionPin
   const missingConfig = accounts.filter((a) => !a.crn || !a.transactionPin);
   if (missingConfig.length > 0) {
-    console.error(
-      `\n  Error: The following accounts are missing 'crn' or 'transactionPin':`
-    );
+    console.error("\n  Error: The following accounts are missing 'crn' or 'transactionPin':");
     for (const a of missingConfig) {
-      console.error(`    - ${a.username}`);
+      console.error("    - " + a.username);
     }
-    console.error(`\n  Run ${c.cyan}meroshare accounts${c.reset} to update them.\n`);
+    console.error("\n  Run " + c.cyan + "meroshare accounts" + c.reset + " to update them.\n");
     process.exit(1);
   }
 
-  printHeader(`MEROSHARE IPO APPLY  —  ${accounts.length} Account(s)`);
+  printHeader("MEROSHARE IPO APPLY  —  " + accounts.length + " Account(s)");
 
-  // Step 1: Login with first account to fetch issue list
   const firstAccount = accounts[0]!;
   const client = new MeroshareClient();
   const { id: dpId, name: dpName } = client.getDPId(String(firstAccount.dpCode), dpList);
 
-  printStatus(`Logging in as ${firstAccount.username} @ ${dpName} to fetch issues...`);
+  printStatus("Logging in as " + firstAccount.username + " @ " + dpName + " to fetch issues...");
   await client.login(dpId, firstAccount.username, firstAccount.password);
   printStatus("", true);
 
-  // Step 2: Get applicable issues
   printStatus("Fetching applicable issues...");
   const issueResp = await client.getApplicableIssues();
   printStatus("", true);
@@ -439,8 +553,7 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
 
   displayIssueList(issues);
 
-  // Step 3: Let user select an issue
-  const selection = await prompt(`\n  Select issue number (1-${issues.length}): `);
+  const selection = await prompt("\n  Select issue number (1-" + issues.length + "): ");
   const issueIdx = parseInt(selection, 10) - 1;
   if (isNaN(issueIdx) || issueIdx < 0 || issueIdx >= issues.length) {
     console.error("  Invalid selection.");
@@ -450,15 +563,13 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
 
   const selectedIssue = issues[issueIdx]!;
 
-  // Step 4: Get issue detail
-  printStatus(`Fetching details for ${selectedIssue.scrip}...`);
+  printStatus("Fetching details for " + selectedIssue.scrip + "...");
   const issueDetail = await client.getIssueDetail(selectedIssue.companyShareId);
   printStatus("", true);
 
   displayIssueDetail(issueDetail);
 
-  // Step 5: Check all accounts' apply status
-  // Reuse the first account's session, login fresh for the rest
+  // Check all accounts' apply status (reuse first account's session)
   console.log("");
   printStatus("Checking all accounts...\n");
 
@@ -469,7 +580,6 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
     const dpCode = String(account.dpCode);
     const { id: acDpId, name: acDpName } = client.getDPId(dpCode, dpList);
 
-    // Reuse the existing client for the first account, new client for the rest
     const acClient = i === 0 ? client : new MeroshareClient();
 
     try {
@@ -492,7 +602,7 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      printError(`Error checking ${account.username}: ${msg}`);
+      printError("Error checking " + account.username + ": " + msg);
     }
   }
 
@@ -501,36 +611,33 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
   // Display account list with status
   const unapplied = accountStatuses.filter((s) => !s.applied);
 
-  console.log(`\n  ${c.bold}${c.white}Accounts for ${selectedIssue.scrip}:${c.reset}`);
-  console.log(`  ${c.dim}${"─".repeat(60)}${c.reset}`);
+  console.log("\n  " + c.bold + c.white + "Accounts for " + selectedIssue.scrip + ":" + c.reset);
+  console.log("  " + c.dim + "─".repeat(60) + c.reset);
 
-  // Option 0: All Unapplied (only if there are unapplied accounts)
   let optionIdx = 0;
   if (unapplied.length > 0) {
-    console.log(`  ${c.bold}${c.cyan}(${optionIdx})${c.reset}  ${c.bold}All Unapplied (${unapplied.length} accounts)${c.reset}`);
+    console.log("  " + c.bold + c.cyan + "(" + optionIdx + ")" + c.reset + "  " + c.bold + "All Unapplied (" + unapplied.length + " accounts)" + c.reset);
     optionIdx++;
   }
 
-  // Individual accounts
   for (const status of accountStatuses) {
     const tag = status.applied
-      ? `${c.red}[Applied]${c.reset}`
-      : `${c.green}[Not Applied]${c.reset}`;
+      ? c.red + "[Applied]" + c.reset
+      : c.green + "[Not Applied]" + c.reset;
     const selectable = !status.applied;
-    const idx = selectable ? `${c.cyan}(${optionIdx})${c.reset}` : `${c.dim}   ${c.reset}`;
+    const idx = selectable ? c.cyan + "(" + optionIdx + ")" + c.reset : c.dim + "   " + c.reset;
     if (selectable) optionIdx++;
-    console.log(`  ${idx}  ${status.name} (${status.account.username})  ${tag}`);
+    console.log("  " + idx + "  " + status.name + " (" + status.account.username + ")  " + tag);
   }
 
   if (unapplied.length === 0) {
-    console.log(`\n  All accounts have already applied for ${selectedIssue.scrip}.`);
+    console.log("\n  All accounts have already applied for " + selectedIssue.scrip + ".");
     printFooter();
     return;
   }
 
-  // Step 6: Let user select accounts
   const maxOption = optionIdx - 1;
-  const accountSelection = await prompt(`\n  Select option (0-${maxOption}): `);
+  const accountSelection = await prompt("\n  Select option (0-" + maxOption + "): ");
   const selectedOption = parseInt(accountSelection, 10);
   if (isNaN(selectedOption) || selectedOption < 0 || selectedOption > maxOption) {
     console.error("  Invalid selection.");
@@ -541,14 +648,12 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
   if (unapplied.length > 0 && selectedOption === 0) {
     targetAccounts = unapplied;
   } else {
-    // Map option index to the specific unapplied account
     const unappliedIdx = unapplied.length > 0 ? selectedOption - 1 : selectedOption;
     targetAccounts = [unapplied[unappliedIdx]!];
   }
 
-  // Step 7: Get kitta amount
   const kittaInput = await prompt(
-    `\n  Enter number of kitta to apply (min: ${issueDetail.minUnit}, max: ${issueDetail.maxUnit}, multiple of ${issueDetail.multipleOf}): `
+    "\n  Enter number of kitta to apply (min: " + issueDetail.minUnit + ", max: " + issueDetail.maxUnit + ", multiple of " + issueDetail.multipleOf + "): "
   );
   const kitta = parseInt(kittaInput, 10);
   if (
@@ -558,27 +663,27 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
     kitta % issueDetail.multipleOf !== 0
   ) {
     console.error(
-      `  Invalid kitta. Must be between ${issueDetail.minUnit}-${issueDetail.maxUnit}, multiple of ${issueDetail.multipleOf}.`
+      "  Invalid kitta. Must be between " + issueDetail.minUnit + "-" + issueDetail.maxUnit + ", multiple of " + issueDetail.multipleOf + "."
     );
     return;
   }
 
-  // Step 8: Confirm
+  // Confirm
   console.log(
-    `\n  Applying ${c.bold}${kitta}${c.reset} kitta of ${c.bold}${selectedIssue.scrip}${c.reset} to ${c.bold}${targetAccounts.length}${c.reset} account(s):`
+    "\n  Applying " + c.bold + kitta + c.reset + " kitta of " + c.bold + selectedIssue.scrip + c.reset + " to " + c.bold + targetAccounts.length + c.reset + " account(s):"
   );
   for (const t of targetAccounts) {
-    console.log(`    - ${t.name} (${t.account.username})`);
+    console.log("    - " + t.name + " (" + t.account.username + ")");
   }
-  const confirmApply = await prompt(`\n  Proceed? (y/n): `);
+  const confirmApply = await prompt("\n  Proceed? (y/n): ");
   if (confirmApply.toLowerCase() !== "y") {
     console.log("  Cancelled.");
     return;
   }
 
-  // Step 9: Apply to selected accounts
+  // Apply
   console.log("");
-  printHeader(`APPLYING ${kitta} KITTA of ${selectedIssue.scrip}`);
+  printHeader("APPLYING " + kitta + " KITTA of " + selectedIssue.scrip);
 
   const results: { username: string; success: boolean; message: string }[] = [];
 
@@ -587,14 +692,13 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
     const acClient = new MeroshareClient();
 
     try {
-      printStatus(`Logging in as ${account.username} @ ${status.dpName}...`);
+      printStatus("Logging in as " + account.username + " @ " + status.dpName + "...");
       await acClient.login(status.dpId, account.username, account.password);
       printStatus("", true);
 
       const detail = await acClient.getOwnDetail();
 
-      // Fetch bank details
-      printStatus(`  Fetching bank details...`);
+      printStatus("  Fetching bank details...");
       const banks = await acClient.getBankList();
       if (banks.length === 0) {
         printStatus("", true);
@@ -618,8 +722,7 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
 
       displayBankInfo(account.username, detail.name, bank.name, bankAccount.accountNumber);
 
-      // Apply
-      printStatus(`  Applying ${kitta} kitta...`);
+      printStatus("  Applying " + kitta + " kitta...");
       await acClient.applyIPO({
         demat: detail.demat,
         boid: detail.boid,
@@ -651,11 +754,11 @@ async function applyCommand(config: Config, dpList: DP[]): Promise<void> {
   printHeader("APPLY SUMMARY");
   const successCount = results.filter((r) => r.success).length;
   const failCount = results.filter((r) => !r.success).length;
-  console.log(`  ${c.green}✓${c.reset} Success: ${successCount}  |  ${c.red}✗${c.reset} Failed/Skipped: ${failCount}`);
+  console.log("  " + c.green + "✓" + c.reset + " Success: " + successCount + "  |  " + c.red + "✗" + c.reset + " Failed/Skipped: " + failCount);
   for (const r of results) {
     const icon = r.success ? "✓" : "✗";
     const color = r.success ? c.green : c.red;
-    console.log(`  ${color}${icon}${c.reset}  ${r.username}: ${r.message}`);
+    console.log("  " + color + icon + c.reset + "  " + r.username + ": " + r.message);
   }
   printFooter();
 }
@@ -675,7 +778,10 @@ async function main(): Promise<void> {
     case "version":
     case "--version":
     case "-v":
-      console.log(`@cbashik/meroshare v${VERSION}`);
+      console.log("@cbashik/meroshare v" + VERSION);
+      return;
+    case "init":
+      await initCommand();
       return;
     case "configure":
       await configureCommand();
@@ -688,8 +794,8 @@ async function main(): Promise<void> {
   // Validate known API commands
   const apiCommands = ["portfolio", "apply"];
   if (!apiCommands.includes(command)) {
-    console.log(`\n  Unknown command: ${c.red}${command}${c.reset}`);
-    console.log(`  Run ${c.cyan}meroshare help${c.reset} for usage.\n`);
+    console.log("\n  Unknown command: " + c.red + command + c.reset);
+    console.log("  Run " + c.cyan + "meroshare help" + c.reset + " for usage.\n");
     process.exit(1);
   }
 
@@ -698,7 +804,13 @@ async function main(): Promise<void> {
   const { accounts } = config;
 
   if (!accounts?.length) {
-    console.log(`\n  No accounts configured. Run ${c.cyan}meroshare configure${c.reset} to add one.\n`);
+    console.log("\n  No accounts configured. Run " + c.cyan + "meroshare configure" + c.reset + " to add one.\n");
+    process.exit(1);
+  }
+
+  // Check curl before making API calls
+  if (!isCurlInstalled()) {
+    console.log("\n  " + c.red + "✗" + c.reset + " curl is not installed. Run " + c.cyan + "meroshare init" + c.reset + " to set up dependencies.\n");
     process.exit(1);
   }
 
@@ -707,7 +819,7 @@ async function main(): Promise<void> {
   printStatus("Fetching DP list...");
   const dpList = await client.getDPList();
   printStatus("", true);
-  process.stdout.write(`  ${c.dim}(${dpList.length} DPs)${c.reset}\n`);
+  process.stdout.write("  " + c.dim + "(" + dpList.length + " DPs)" + c.reset + "\n");
 
   switch (command) {
     case "portfolio":

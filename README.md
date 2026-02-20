@@ -13,55 +13,45 @@ A command-line tool to view your portfolio and apply for IPOs across multiple Me
 
 Zero runtime dependencies. Uses system `curl` under the hood to communicate with the Meroshare API.
 
-## Prerequisites
-
-- **Node.js** v18+
-- **curl** (pre-installed on macOS and most Linux distros)
-
-## Install
+## Getting Started
 
 ```bash
-git clone <repo-url> && cd meroshare-cli-ts
-pnpm install && pnpm build
+# 1. Check dependencies and create config
+npx @cbashik/meroshare@latest init
 
-# Link globally
-pnpm link --global
-```
+# 2. Add your accounts
+npx @cbashik/meroshare@latest configure
 
-After linking, the `meroshare` command is available system-wide.
+# 3. View portfolio
+npx @cbashik/meroshare@latest portfolio
 
-## Quick Start
-
-```bash
-# First-time setup — interactively add your accounts
-meroshare configure
-
-# View portfolio
-meroshare
-
-# Apply for an IPO
-meroshare apply
-
-# Manage accounts
-meroshare accounts
+# 4. Apply for an IPO
+npx @cbashik/meroshare@latest apply
 ```
 
 ## Commands
 
-| Command     | Description                                 |
-| ----------- | ------------------------------------------- |
-| `portfolio` | Show portfolio for all accounts *(default)* |
-| `apply`     | Apply for an open IPO across accounts       |
-| `accounts`  | List, add, remove, or update accounts       |
-| `configure` | Interactive first-time setup                |
-| `help`      | Show help message                           |
-| `version`   | Show version                                |
+```bash
+npx @cbashik/meroshare@latest init           # Check curl, Node.js, create config
+npx @cbashik/meroshare@latest configure      # Add accounts interactively
+npx @cbashik/meroshare@latest accounts       # List, add, remove, or update accounts
+npx @cbashik/meroshare@latest portfolio      # Show portfolio (default)
+npx @cbashik/meroshare@latest apply          # Apply for an open IPO
+npx @cbashik/meroshare@latest help           # Show help
+npx @cbashik/meroshare@latest version        # Show version
+```
+
+Running without a command defaults to `portfolio`:
+
+```bash
+npx @cbashik/meroshare@latest
+```
 
 ## Configuration
 
-Config is stored at `~/.config/meroshare/config.json` on macOS and Linux, or `%APPDATA%\meroshare\config.json` on Windows. A `config.json` in the current directory is also picked up as a fallback.
+Config is stored at `~/.config/meroshare/config.json` on macOS and Linux, or `%APPDATA%\meroshare\config.json` on Windows.
 
-You can set up accounts interactively with `meroshare configure`, or edit the file directly:
+You can set up accounts interactively with `configure`, or edit the file directly:
 
 ```json
 {
@@ -87,7 +77,7 @@ You can set up accounts interactively with `meroshare configure`, or edit the fi
 
 ## Apply Flow
 
-When you run `meroshare apply`:
+When you run `apply`:
 
 1. Lists all currently open issues
 2. You select an issue to see its details (kitta limits, share value, manager)
@@ -96,14 +86,6 @@ When you run `meroshare apply`:
 5. You choose to apply to all unapplied accounts or pick a specific one
 6. Enter the number of kitta
 7. Confirm, then it applies one by one and shows a summary
-
-## Development
-
-```bash
-pnpm build          # compile TypeScript
-pnpm start          # run compiled CLI
-pnpm start apply    # run apply command
-```
 
 ## License
 

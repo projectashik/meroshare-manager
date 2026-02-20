@@ -3,11 +3,28 @@
   "version": "0.1.0",
   "description": "CLI tool for Meroshare — view portfolio and apply for IPOs across multiple accounts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/projectashik/meroshare-manager.git"
+  },
+  "homepage": "https://github.com/projectashik/meroshare-manager#readme",
+  "bugs": {
+    "url": "https://github.com/projectashik/meroshare-manager/issues"
+  },
+  "author": "projectashik",
   "bin": {
     "meroshare": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "tsc",
     "start": "node dist/index.js"
   },
   "keywords": ["meroshare", "nepal", "stock", "ipo", "portfolio", "cdsc", "cli"],
