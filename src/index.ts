@@ -903,12 +903,12 @@ async function collectBoidCommand(): Promise<void> {
       printStatus("", true);
 
       const detail = await acClient.getOwnDetail();
-      account.boid = detail.boid;
+      account.boid = detail.demat;
       updated++;
 
       console.log(
         "  " + c.green + "✓" + c.reset + "  " +
-        c.bold + account.username + c.reset + "  BOID: " + c.cyan + detail.boid + c.reset
+        c.bold + account.username + c.reset + "  BOID: " + c.cyan + detail.demat + c.reset
       );
 
       await acClient.logout();
