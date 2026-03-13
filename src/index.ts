@@ -23,7 +23,7 @@ import { isMacOS, keychainAvailable, loadFromKeychain, saveToKeychain } from "./
 import type { Config, DP, Account } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VERSION = "0.1.0";
+const VERSION = "0.1.2";
 
 // ─── ANSI Colors ────────────────────────────────────────────────────────────────
 
@@ -236,6 +236,7 @@ function helpCommand(): void {
     "    " + c.cyan + "accounts" + c.reset + "     List, add, remove, or update accounts",
     "    " + c.cyan + "portfolio" + c.reset + "    Show portfolio for all accounts " + c.dim + "(default)" + c.reset,
     "    " + c.cyan + "apply" + c.reset + "        Apply for an open IPO across accounts",
+    "    " + c.cyan + "collect-boid" + c.reset + "  Fetch and store BOID for all accounts",
     "    " + c.cyan + "migrate" + c.reset + "      Migrate config.json → macOS Keychain",
     "    " + c.cyan + "help" + c.reset + "         Show this help message",
     "    " + c.cyan + "version" + c.reset + "      Show version",
@@ -871,6 +872,62 @@ async function migrateCommand(): Promise<void> {
   }
 }
 
+// ─── Collect BOID Command ────────────────────────────────────────────────────
+
+async function collectBoidCommand(): Promise<void> {
+  const config = loadConfig();
+  const { accounts } = config;
+
+  if (!accounts?.length) {
+    console.log("\n  No accounts configured. Run " + c.cyan + "meroshare configure" + c.reset + " to add one.\n");
+    process.exit(1);
+  }
+
+  printHeader("MEROSHARE — COLLECT BOID  (" + accounts.length + " Account(s))");
+
+  const client = new MeroshareClient();
+  printStatus("Fetching DP list...");
+  const dpList = await client.getDPList();
+  printStatus("", true);
+
+  let updated = 0;
+
+  for (const account of accounts) {
+    const dpCode = String(account.dpCode);
+    const acClient = new MeroshareClient();
+
+    try {
+      const { id: dpId, name: dpName } = acClient.getDPId(dpCode, dpList);
+      printStatus("Logging in as " + account.username + " @ " + dpName + "...");
+      await acClient.login(dpId, account.username, account.password);
+      printStatus("", true);
+
+      const detail = await acClient.getOwnDetail();
+      account.boid = detail.boid;
+      updated++;
+
+      console.log(
+        "  " + c.green + "✓" + c.reset + "  " +
+        c.bold + account.username + c.reset + "  BOID: " + c.cyan + detail.boid + c.reset
+      );
+
+      await acClient.logout();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      printError("Error for " + account.username + ": " + msg);
+    }
+  }
+
+  if (updated > 0) {
+    saveConfig(config);
+    console.log("\n  " + c.green + "✓" + c.reset + " " + updated + " BOID(s) saved to config.");
+  } else {
+    console.log("\n  " + c.yellow + "⚠" + c.reset + " No BOIDs were collected.");
+  }
+
+  printFooter();
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -899,6 +956,9 @@ async function main(): Promise<void> {
       return;
     case "migrate":
       await migrateCommand();
+      return;
+    case "collect-boid":
+      await collectBoidCommand();
       return;
   }
 

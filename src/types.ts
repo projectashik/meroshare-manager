@@ -4,6 +4,7 @@ export interface Account {
   password: string;
   crn?: string;
   transactionPin?: string;
+  boid?: string;
 }
 
 export interface Config {

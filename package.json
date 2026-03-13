@@ -1,6 +1,6 @@
 {
   "name": "@cbashik/meroshare",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI tool for Meroshare — view portfolio and apply for IPOs across multiple accounts",
   "type": "module",
   "repository": {
